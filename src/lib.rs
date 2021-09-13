@@ -66,13 +66,13 @@ impl fmt::Debug for VecSink {
 
 pub trait ResultExt<D>: Sized {
     type ReportedType;
-    fn report<'s, S: DiagnosticSink + ?Sized>(self, sink: &'s mut S) -> Self::ReportedType;
+    fn report<S: DiagnosticSink + ?Sized>(self, sink: &mut S) -> Self::ReportedType;
 }
 
 /// An `Err(E)` where `E` can be converted to the relevant `D: Diagnostic` is reportable.
 impl<T, E: Into<D>, D: Reportable + Sized + 'static> ResultExt<D> for Result<T, E> {
     type ReportedType = Result<T, Reported<D>>;
-    fn report<'s, S: DiagnosticSink + ?Sized>(self, sink: &'s mut S) -> Self::ReportedType {
+    fn report<S: DiagnosticSink + ?Sized>(self, sink: &mut S) -> Self::ReportedType {
         match self {
             Ok(x) => Ok(x),
             Err(e) => {

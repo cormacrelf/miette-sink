@@ -30,7 +30,7 @@ enum Error {
 
     #[error(transparent)]
     #[diagnostic(code(app::input::parse), help("input an integer only please"))]
-    ParseError(#[from] ParseIntError),
+    Parse(#[from] ParseIntError),
 
     #[error(transparent)]
     #[diagnostic(code(app::input::io))]
@@ -133,7 +133,7 @@ fn parser_or_whatever(num: &str, sink: Sink) -> Result<i32, Reported<Error>> {
 
 fn value_reader(sink: Sink) -> Result<String, Reported<Error>> {
     let mut input = String::new();
-    println!("");
+    println!();
     println!("=> please enter an integer below, non-negative please");
     std::io::stdin().read_line(&mut input).report(sink)?;
     Ok(input)
