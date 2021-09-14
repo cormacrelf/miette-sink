@@ -1,13 +1,16 @@
+use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, Severity};
 use std::num::ParseIntError;
-
-use miette::Severity;
-use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
-use miette_sink::Reported;
 use thiserror::Error;
 
-use miette_sink::DiagnosticSink;
-use miette_sink::VecSink;
-use miette_sink::{Reportable, ResultExt};
+use miette_sink::{Reportable, Reported};
+
+use miette_sink::{DiagnosticSink, ResultExt, VecSink};
+/// A little shorthand, as a treat. This sink holds Diag, an enum of warning/error.
+type Sink<'a> = &'a mut VecSink<Diag>;
+
+// // use this instead to use BoxedDiag (= Box<dyn Diagnostic + 'static>) everywhere.
+// use miette_sink::dynamic::{DynDiagnosticSink, VecSink, DynResultExt};
+// type Sink<'a> = &'a mut dyn DynDiagnosticSink;
 
 #[derive(Debug, Error, Diagnostic)]
 enum Warning {
@@ -37,13 +40,22 @@ enum Error {
     Io(#[from] std::io::Error),
 }
 
+/// Make a nice enum to wrap both the warnings and the errors
+#[derive(Debug, Error, Diagnostic)]
+enum Diag {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Warning(#[from] Warning),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Error(#[from] Error),
+}
+
 /// Error is reportable, Warning is not.
 /// This lets us use `.report(sink)?` but not on Warning, where it would mean
 /// we end up returning Err but only having warnings in the sink.
 impl Reportable for Error {}
-
-/// A little shorthand, as a treat
-type Sink<'a> = &'a mut dyn DiagnosticSink;
 
 #[derive(Debug, Error, Diagnostic)]
 enum IntSize {

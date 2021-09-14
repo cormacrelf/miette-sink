@@ -6,77 +6,66 @@ use core::marker::PhantomData;
 use miette::Diagnostic;
 use miette::ReportHandler;
 
-pub trait DiagnosticSink {
-    fn report_boxed(&mut self, diag: Box<dyn Diagnostic>);
+pub mod dynamic;
+
+pub trait DiagnosticSink<D> {
+    fn report(&mut self, diagnostic: D);
 }
 
-impl<'a> dyn DiagnosticSink + 'a {
-    pub fn report(&mut self, diag: impl Diagnostic + 'static) {
-        self.report_boxed(Box::new(diag));
-    }
-}
-
-/// A DiagnosticSink that
-pub struct VecSink {
-    inner: Vec<Box<dyn Diagnostic>>,
+pub struct VecSink<D> {
+    inner: Vec<D>,
     printer: Box<dyn ReportHandler>,
 }
 
-impl VecSink {
+impl<D> VecSink<D> {
     pub fn new(printer: impl ReportHandler) -> Self {
         Self {
-            inner: Vec::new(),
+            inner: vec![],
             printer: Box::new(printer),
         }
-    }
-
-    /// When you don't have a `&mut dyn DiagnosticSink`, you can equivalently use this method.
-    pub fn report(&mut self, diag: impl Diagnostic + 'static)
-    where
-        Self: Sized,
-    {
-        self.report_boxed(Box::new(diag));
     }
 
     pub fn clear(&mut self) {
         self.inner.clear()
     }
-    pub fn into_inner(self) -> Vec<Box<dyn Diagnostic>> {
+    pub fn diagnostics(&self) -> &[D] {
+        self.inner.as_ref()
+    }
+    pub fn into_inner(self) -> Vec<D> {
         self.inner
     }
-    pub fn diagnostics(&self) -> &[Box<dyn Diagnostic>] {
-        &self.inner
+}
+
+impl<S: Diagnostic, D: Into<S>> DiagnosticSink<D> for VecSink<S> {
+    fn report(&mut self, diagnostic: D) {
+        self.inner.push(diagnostic.into())
     }
 }
 
-impl DiagnosticSink for VecSink {
-    fn report_boxed(&mut self, diag: Box<dyn Diagnostic>) {
-        self.inner.push(diag);
-    }
-}
-
-impl fmt::Debug for VecSink {
+impl<D: Diagnostic + 'static> fmt::Debug for VecSink<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for diag in &self.inner {
-            self.printer.debug(diag.as_ref(), f)?
+            self.printer.debug(diag, f)?
         }
         Ok(())
     }
 }
 
-pub trait ResultExt<D>: Sized {
+pub trait ResultExt<D: Diagnostic>: Sized {
     type ReportedType;
-    fn report<S: DiagnosticSink + ?Sized>(self, sink: &mut S) -> Self::ReportedType;
+    fn report<S: DiagnosticSink<D> + ?Sized>(self, sink: &mut S) -> Self::ReportedType;
 }
 
 /// An `Err(E)` where `E` can be converted to the relevant `D: Diagnostic` is reportable.
 impl<T, E: Into<D>, D: Reportable + Sized + 'static> ResultExt<D> for Result<T, E> {
     type ReportedType = Result<T, Reported<D>>;
-    fn report<S: DiagnosticSink + ?Sized>(self, sink: &mut S) -> Self::ReportedType {
+    fn report<S: DiagnosticSink<D> + ?Sized>(self, sink: &mut S) -> Self::ReportedType {
         match self {
             Ok(x) => Ok(x),
             Err(e) => {
-                sink.report_boxed(Box::new(e.into()));
+                let d = e.into();
+                let sd = d.into();
+                sink.report(sd);
                 Err(Reported::new())
             }
         }
